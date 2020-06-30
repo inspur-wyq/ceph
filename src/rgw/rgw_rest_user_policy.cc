@@ -164,6 +164,10 @@ void RGWPutUserPolicy::execute()
   } catch (rgw::IAM::PolicyParseException& e) {
     ldout(s->cct, 20) << "failed to parse policy: " << e.what() << dendl;
     op_ret = -ERR_MALFORMED_DOC;
+  } catch (buffer::error& err) {
+    ldout(s->cct, 0) << "ERROR: failed to decode user policies" << dendl;
+    op_ret = -EIO;
+    return;
   }
 
   if (op_ret == 0) {
@@ -219,7 +223,13 @@ void RGWGetUserPolicy::execute()
     map<string, string> policies;
     if (auto it = uattrs.find(RGW_ATTR_USER_POLICY); it != uattrs.end()) {
       bufferlist bl = uattrs[RGW_ATTR_USER_POLICY];
-      decode(policies, bl);
+      try {
+        decode(policies, bl);
+      } catch (buffer::error& err) {
+        ldout(s->cct, 0) << "ERROR: failed to decode user policies" << dendl;
+        op_ret = -EIO;
+        return;
+      }
       if (auto it = policies.find(policy_name); it != policies.end()) {
         policy = policies[policy_name];
         dump(s->formatter);
@@ -283,7 +293,13 @@ void RGWListUserPolicies::execute()
       s->formatter->close_section();
       s->formatter->open_object_section("ListUserPoliciesResult");
       bufferlist bl = uattrs[RGW_ATTR_USER_POLICY];
-      decode(policies, bl);
+      try {
+        decode(policies, bl);
+      } catch (buffer::error& err) {
+        ldout(s->cct, 0) << "ERROR: failed to decode user policies" << dendl;
+        op_ret = -EIO;
+        return;
+      }
       for (const auto& p : policies) {
         s->formatter->open_object_section("PolicyNames");
         s->formatter->dump_string("member", p.first);
@@ -355,7 +371,13 @@ void RGWDeleteUserPolicy::execute()
   map<string, string> policies;
   if (auto it = uattrs.find(RGW_ATTR_USER_POLICY); it != uattrs.end()) {
     bufferlist out_bl = uattrs[RGW_ATTR_USER_POLICY];
-    decode(policies, out_bl);
+    try {
+      decode(policies, out_bl);
+    } catch (buffer::error& err) {
+      ldout(s->cct, 0) << "ERROR: failed to decode user policies" << dendl;
+      op_ret = -EIO;
+      return;
+    }
 
     if (auto p = policies.find(policy_name); p != policies.end()) {
       bufferlist in_bl;
